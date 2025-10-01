@@ -151,16 +151,34 @@ elif page == "Trends Over Time":
 # ---------------------------
 # 7. Regional Insights Page (Side-by-Side Maps)
 # ---------------------------
+import json
+
+@st.cache_data
+def load_geojson():
+    url = "https://raw.githubusercontent.com/geohacker/india/master/state/india_states.geojson"
+    try:
+        r = requests.get(url, timeout=10)
+        r.raise_for_status()  # Raise error if HTTP status != 200
+        return r.json()
+    except Exception as e:
+        st.warning("⚠️ Could not fetch India GeoJSON from GitHub, using local fallback.")
+        # Minimal local GeoJSON for major states
+        local_geojson = {
+            "type": "FeatureCollection",
+            "features": [
+                {"type": "Feature", "properties": {"ST_NM": "Delhi"}, "geometry": {"type": "Polygon","coordinates": [[[77.0,28.5],[77.5,28.5],[77.5,28.8],[77.0,28.8],[77.0,28.5]]]}},
+                {"type": "Feature", "properties": {"ST_NM": "Maharashtra"}, "geometry": {"type": "Polygon","coordinates": [[[73.0,18.0],[75.5,18.0],[75.5,20.0],[73.0,20.0],[73.0,18.0]]]}},
+                {"type": "Feature", "properties": {"ST_NM": "Karnataka"}, "geometry": {"type": "Polygon","coordinates": [[[75.0,11.5],[77.5,11.5],[77.5,15.0],[75.0,15.0],[75.0,11.5]]]}},
+                {"type": "Feature", "properties": {"ST_NM": "Tamil Nadu"}, "geometry": {"type": "Polygon","coordinates": [[[78.0,10.0],[80.5,10.0],[80.5,13.0],[78.0,13.0],[78.0,10.0]]]}},
+                {"type": "Feature", "properties": {"ST_NM": "Uttar Pradesh"}, "geometry": {"type": "Polygon","coordinates": [[[79.0,26.0],[82.0,26.0],[82.0,28.5],[79.0,28.5],[79.0,26.0]]]}}
+            ]
+        }
+        return local_geojson
+
 elif page == "Regional Insights":
     st.subheader("🗺️ Regional Heatmap Comparison (India States)")
 
-    # Load India GeoJSON
-    @st.cache_data
-    def load_geojson():
-        url = "https://raw.githubusercontent.com/geohacker/india/master/state/india_states.geojson"
-        r = requests.get(url)
-        return r.json()
-
+    # Load GeoJSON safely
     india_states = load_geojson()
 
     # Standardize state names
