@@ -16,6 +16,32 @@ st.set_page_config(
     layout="wide"
 )
 
+# --- Enhanced Dark Theme CSS ---
+st.markdown(
+    """
+    <style>
+    /* App background */
+    .stApp { background-color: #0f1119; color: #f0f0f0; }
+    
+    /* Headers and markdown */
+    .stMarkdown, .stText, .stSubheader, .stHeader { color: #f0f0f0; }
+    
+    /* Sidebar gradient */
+    .stSidebar { background: linear-gradient(180deg, #1a1c26, #0f1119); color: #f0f0f0; }
+    
+    /* Metric cards */
+    .stMetric { background-color: #1b1e2a; border-radius: 10px; padding: 15px; color: #f0f0f0; }
+    
+    /* DataFrame colors */
+    .dataframe td, .dataframe th { color: #f0f0f0; }
+    
+    /* Buttons */
+    .stButton>button { background-color: #272b3b; color: #f0f0f0; border-radius: 5px; }
+    </style>
+    """,
+    unsafe_allow_html=True
+)
+
 st.title("Search Before Action: Google Trends & India’s Delivery Wars")
 st.markdown("### Swiggy 🟠 | Zomato 🔴 | Blinkit 🟢")
 
@@ -24,37 +50,18 @@ st.markdown("### Swiggy 🟠 | Zomato 🔴 | Blinkit 🟢")
 # ---------------------------
 @st.cache_data(ttl=86400)
 def load_trends():
-    """Fetch live Google Trends data (5 years) for Swiggy, Zomato, Blinkit in India."""
     pytrends = TrendReq(hl="en-IN", tz=330)
     kw_list = ["Swiggy", "Zomato", "Blinkit"]
     pytrends.build_payload(kw_list, timeframe="today 5-y", geo="IN")
+    df = pytrends.interest_over_time()
+    if "isPartial" in df.columns:
+        df = df.drop(columns=["isPartial"])
+    df = df.reset_index()
 
-    # Time-series data
-    data = pytrends.interest_over_time()
-    if "isPartial" in data.columns:
-        data = data.drop(columns=["isPartial"])
-    data = data.reset_index()
-
-    # State-level data
-    geo = pytrends.interest_by_region(resolution="REGION", inc_low_vol=False, inc_geo_code=False)
-    geo = geo.reset_index()
-    geo = geo.rename(columns={"geoName": "state"})
-
-    # Standardize state names
-    state_mapping = {
-        "NCT": "Delhi",
-        "Orissa": "Odisha",
-        "Uttaranchal": "Uttarakhand",
-        "Jammu & Kashmir": "Jammu and Kashmir",
-        "Andaman & Nicobar Islands": "Andaman & Nicobar",
-        "Dadra and Nagar Haveli": "Dadra & Nagar Haveli",
-        "Daman and Diu": "Daman & Diu",
-        "Arunanchal Pradesh": "Arunachal Pradesh"
-    }
-    geo["state"] = geo["state"].replace(state_mapping)
-    geo["state"] = geo["state"].str.title().str.strip()
-
-    return data, geo
+    geo_df = pytrends.interest_by_region(resolution="REGION", inc_low_vol=False, inc_geo_code=False)
+    geo_df = geo_df.reset_index().rename(columns={"geoName":"state"})
+    geo_df["state"] = geo_df["state"].str.title().str.strip()
+    return df, geo_df
 
 # ---------------------------
 # 3. Load Data
@@ -62,7 +69,7 @@ def load_trends():
 try:
     df, geo_df = load_trends()
 except Exception:
-    st.warning("⚠️ Could not fetch live Google Trends data. Using dummy data.")
+    st.warning("⚠️ Could not fetch live Google Trends data. Using placeholder data.")
     dates = pd.date_range("2019-01-01", periods=250, freq="W")
     df = pd.DataFrame({
         "date": dates,
@@ -94,27 +101,24 @@ page = st.sidebar.radio("Go to:", [
 # 5. Pages
 # ---------------------------
 
-# --- Overview Page ---
+# --- Overview ---
 if page == "Overview":
     st.subheader("📌 Big Picture: Who’s Winning?")
     col1, col2, col3 = st.columns(3)
     col1.metric("Swiggy Peak", f"{df['Swiggy'].max()} index")
     col2.metric("Zomato Peak", f"{df['Zomato'].max()} index")
     col3.metric("Blinkit Peak", f"{df['Blinkit'].max()} index")
-
-    fig = px.line(
-        df,
-        x="date",
-        y=["Swiggy","Zomato","Blinkit"],
-        title="📈 Search Popularity Over Time (5 years)",
-        labels={"value":"Search Index", "date":"Date"}
-    )
+    
+    fig = px.line(df, x="date", y=["Swiggy","Zomato","Blinkit"],
+                  title="📈 Search Popularity Over Time (5 years)",
+                  labels={"value":"Search Index", "date":"Date"},
+                  template="plotly_dark")
     st.plotly_chart(fig, use_container_width=True)
 
     st.markdown("**Key Observations:**")
-    st.markdown("- Blinkit shows rapid growth post-2022 → quick-commerce trend.")
-    st.markdown("- Swiggy dominates in South India historically.")
-    st.markdown("- Zomato strong in West & metro cities.")
+    st.markdown("- Blinkit shows sudden spikes post-2022, highlighting quick-commerce growth.")
+    st.markdown("- Swiggy remains consistent across metro cities.")
+    st.markdown("- Zomato leads in western regions like Maharashtra.")
 
 # --- Trends Over Time ---
 elif page == "Trends Over Time":
@@ -122,55 +126,42 @@ elif page == "Trends Over Time":
     window = st.slider("Smoothing Window (weeks):", 1, 8, 4)
     df_smooth = df.copy()
     df_smooth[["Swiggy","Zomato","Blinkit"]] = df_smooth[["Swiggy","Zomato","Blinkit"]].rolling(window).mean()
-
-    fig = px.line(
-        df_smooth,
-        x="date",
-        y=["Swiggy","Zomato","Blinkit"],
-        title="Search Trends (Smoothed)"
-    )
+    
+    fig = px.line(df_smooth, x="date", y=["Swiggy","Zomato","Blinkit"],
+                  title=f"Smoothed Search Trends ({window}-week rolling average)",
+                  labels={"value":"Search Index", "date":"Date"},
+                  template="plotly_dark")
     st.plotly_chart(fig, use_container_width=True)
-
+    
     st.markdown("**Insights:**")
-    st.markdown("- Smoothing removes festival spikes, revealing true growth trends.")
-    st.markdown("- Blinkit spikes often precede media headlines by months.")
-    st.markdown("- Use these trends for planning promotions & stock.")
+    st.markdown("- Rolling average smooths festival spikes (Diwali, New Year).")
+    st.markdown("- Trends help plan promotions 3–5 days in advance.")
 
 # --- Regional Insights ---
 elif page == "Regional Insights":
-    st.subheader("📊 Regional Popularity Across States")
-    app_choice = st.selectbox("Choose App to Visualize:", ["Swiggy","Zomato","Blinkit"])
-
-    # Bar Chart
+    st.subheader("📊 Regional Popularity by App")
+    app_choice = st.selectbox("Choose App:", ["Swiggy","Zomato","Blinkit"])
     geo_sorted = geo_df.sort_values(by=app_choice, ascending=False)
-    fig = px.bar(
-        geo_sorted,
-        x=app_choice,
-        y="state",
-        orientation="h",
-        text=app_choice,
-        title=f"{app_choice} Popularity Across States",
-        labels={app_choice:"Search Index", "state":"State"}
-    )
-    fig.update_layout(yaxis={'categoryorder':'total ascending'})
+    
+    st.markdown(f"**{app_choice} Popularity by State:**")
+    def color_scale(val):
+        if val > 75: return 'background-color: #ff4d4d; color:white'
+        elif val > 50: return 'background-color: #ff944d; color:white'
+        else: return 'background-color: #ffd24d; color:black'
+    st.dataframe(geo_sorted.style.applymap(color_scale, subset=[app_choice]))
+    
+    fig = px.bar(geo_sorted, x="state", y=app_choice,
+                 color=app_choice, color_continuous_scale="YlOrRd",
+                 title=f"{app_choice} Popularity Across States",
+                 template="plotly_dark")
     st.plotly_chart(fig, use_container_width=True)
-
-    # Heatmap Table
-    st.subheader(f"🌡️ Color-coded Table: {app_choice}")
-    st.dataframe(
-        geo_df.style.background_gradient(subset=[app_choice], cmap="YlOrRd")
-    )
-
-    st.markdown("**Insights:**")
-    st.markdown("- Delhi shows high Blinkit interest.")
-    st.markdown("- Swiggy strong in Southern states.")
-    st.markdown("- Zomato leads in Western & metro states.")
 
 # --- Search Intent ---
 elif page == "Search Intent":
-    st.subheader("🔍 What Are People Searching?")
+    st.subheader("🔍 What People Are Searching")
     pytrends = TrendReq(hl="en-IN", tz=330)
-    app_choice = st.selectbox("Choose App:", ["Swiggy","Zomato","Blinkit"])
+    app_choice = st.selectbox("Choose App:", ["Swiggy","Zomato","Blinkit"], key="search_intent")
+    
     try:
         pytrends.build_payload([app_choice], timeframe="today 12-m", geo="IN")
         related = pytrends.related_queries()
@@ -179,11 +170,11 @@ elif page == "Search Intent":
         st.dataframe(top_queries)
         text = " ".join(top_queries["query"].dropna().tolist())
     except Exception:
-        st.warning("⚠️ Could not fetch related queries. Showing placeholders.")
+        st.warning("⚠️ Could not fetch queries. Showing placeholder.")
         placeholder_queries = ["Swiggy coupon","Swiggy near me","Zomato pizza","Blinkit near me"]
         text = " ".join(placeholder_queries)
-
-    wc = WordCloud(width=800, height=400, background_color="white").generate(text)
+    
+    wc = WordCloud(width=800, height=400, background_color="black", colormap="plasma").generate(text)
     fig, ax = plt.subplots(figsize=(10,5))
     ax.imshow(wc, interpolation="bilinear")
     ax.axis("off")
@@ -193,9 +184,8 @@ elif page == "Search Intent":
 elif page == "Stats & Correlations":
     st.subheader("📊 Stats & Correlations")
     corr = df[["Swiggy","Zomato","Blinkit"]].corr()
-    st.dataframe(corr)
-
-    st.markdown("**Key Formulas:**")
+    st.dataframe(corr.style.background_gradient(cmap="plasma", axis=None))
+    st.markdown("**Formulas:**")
     st.latex(r"Z = \frac{x - \mu}{\sigma}")
     st.latex(r"\text{Correlation}(X,Y) = \frac{\text{cov}(X,Y)}{\sigma_X \sigma_Y}")
     st.latex(r"\text{Lag Correlation} = \text{Corr}(X_t, Y_{t+k})")
