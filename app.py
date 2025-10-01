@@ -1,3 +1,4 @@
+# app.py
 import streamlit as st
 import pandas as pd
 import numpy as np
@@ -5,7 +6,6 @@ import plotly.express as px
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from pytrends.request import TrendReq
-import requests
 
 # ---------------------------
 # 1. Page Config
@@ -24,29 +24,37 @@ st.markdown("### Swiggy 🟠 | Zomato 🔴 | Blinkit 🟢")
 # ---------------------------
 @st.cache_data(ttl=86400)
 def load_trends():
+    """Fetch live Google Trends data (5 years) for Swiggy, Zomato, Blinkit in India."""
     pytrends = TrendReq(hl="en-IN", tz=330)
     kw_list = ["Swiggy", "Zomato", "Blinkit"]
     pytrends.build_payload(kw_list, timeframe="today 5-y", geo="IN")
+
+    # Time-series data
     data = pytrends.interest_over_time()
     if "isPartial" in data.columns:
         data = data.drop(columns=["isPartial"])
     data = data.reset_index()
+
+    # State-level data
     geo = pytrends.interest_by_region(resolution="REGION", inc_low_vol=False, inc_geo_code=False)
     geo = geo.reset_index()
     geo = geo.rename(columns={"geoName": "state"})
-    return data, geo
 
-@st.cache_data
-def load_geojson():
-    # Full India GeoJSON from a stable source
-    url = "https://raw.githubusercontent.com/holtzy/D3-graph-gallery/master/DATA/india.geojson"
-    try:
-        r = requests.get(url, timeout=10)
-        r.raise_for_status()
-        return r.json()
-    except Exception:
-        st.warning("⚠️ Could not fetch full India GeoJSON. Heatmap will be limited.")
-        return None
+    # Standardize state names
+    state_mapping = {
+        "NCT": "Delhi",
+        "Orissa": "Odisha",
+        "Uttaranchal": "Uttarakhand",
+        "Jammu & Kashmir": "Jammu and Kashmir",
+        "Andaman & Nicobar Islands": "Andaman & Nicobar",
+        "Dadra and Nagar Haveli": "Dadra & Nagar Haveli",
+        "Daman and Diu": "Daman & Diu",
+        "Arunanchal Pradesh": "Arunachal Pradesh"
+    }
+    geo["state"] = geo["state"].replace(state_mapping)
+    geo["state"] = geo["state"].str.title().str.strip()
+
+    return data, geo
 
 # ---------------------------
 # 3. Load Data
@@ -54,7 +62,7 @@ def load_geojson():
 try:
     df, geo_df = load_trends()
 except Exception:
-    st.warning("⚠️ Could not fetch live data, using dummy data.")
+    st.warning("⚠️ Could not fetch live Google Trends data. Using dummy data.")
     dates = pd.date_range("2019-01-01", periods=250, freq="W")
     df = pd.DataFrame({
         "date": dates,
@@ -68,20 +76,6 @@ except Exception:
         "Zomato": [65, 70, 75, 60, 55],
         "Blinkit": [85, 40, 50, 30, 25]
     })
-
-# Standardize state names
-state_mapping = {
-    "NCT": "Delhi",
-    "Orissa": "Odisha",
-    "Uttaranchal": "Uttarakhand",
-    "Jammu & Kashmir": "Jammu and Kashmir",
-    "Andaman & Nicobar Islands": "Andaman & Nicobar",
-    "Dadra and Nagar Haveli": "Dadra & Nagar Haveli",
-    "Daman and Diu": "Daman & Diu",
-    "Arunanchal Pradesh": "Arunachal Pradesh"
-}
-geo_df["state"] = geo_df["state"].replace(state_mapping)
-geo_df["state"] = geo_df["state"].str.title().str.strip()
 
 # ---------------------------
 # 4. Sidebar Navigation
@@ -108,13 +102,19 @@ if page == "Overview":
     col2.metric("Zomato Peak", f"{df['Zomato'].max()} index")
     col3.metric("Blinkit Peak", f"{df['Blinkit'].max()} index")
 
-    fig = px.line(df, x="date", y=["Swiggy","Zomato","Blinkit"], title="📈 Search Popularity Over Time (5 years)")
+    fig = px.line(
+        df,
+        x="date",
+        y=["Swiggy","Zomato","Blinkit"],
+        title="📈 Search Popularity Over Time (5 years)",
+        labels={"value":"Search Index", "date":"Date"}
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("**Key Insights:**")
-    st.markdown("- Blinkit shows a sharp surge post-2022, reflecting quick-commerce growth 🚀")
-    st.markdown("- Swiggy remains strong in South India and metro cities")
-    st.markdown("- Zomato maintains consistent interest in West and North India")
+    st.markdown("**Key Observations:**")
+    st.markdown("- Blinkit shows rapid growth post-2022 → quick-commerce trend.")
+    st.markdown("- Swiggy dominates in South India historically.")
+    st.markdown("- Zomato strong in West & metro cities.")
 
 # --- Trends Over Time ---
 elif page == "Trends Over Time":
@@ -122,34 +122,49 @@ elif page == "Trends Over Time":
     window = st.slider("Smoothing Window (weeks):", 1, 8, 4)
     df_smooth = df.copy()
     df_smooth[["Swiggy","Zomato","Blinkit"]] = df_smooth[["Swiggy","Zomato","Blinkit"]].rolling(window).mean()
-    fig = px.line(df_smooth, x="date", y=["Swiggy","Zomato","Blinkit"], title="Search Trends (Smoothed)")
+
+    fig = px.line(
+        df_smooth,
+        x="date",
+        y=["Swiggy","Zomato","Blinkit"],
+        title="Search Trends (Smoothed)"
+    )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("**Observations:**")
-    st.markdown("- Smoothing reveals long-term trends by reducing festival spikes")
-    st.markdown("- Blinkit’s sudden rises are evident around 2022–2023")
-    st.markdown("- Correlation between Swiggy and Zomato remains high, reflecting overlapping markets")
+    st.markdown("**Insights:**")
+    st.markdown("- Smoothing removes festival spikes, revealing true growth trends.")
+    st.markdown("- Blinkit spikes often precede media headlines by months.")
+    st.markdown("- Use these trends for planning promotions & stock.")
 
 # --- Regional Insights ---
 elif page == "Regional Insights":
-    st.subheader("🗺️ Regional Heatmap Comparison (India States)")
-    geojson = load_geojson()
-    if geojson is None:
-        st.warning("Full India GeoJSON unavailable. Heatmap limited to available states.")
-    app_choice = st.selectbox("Choose app to visualize:", ["Swiggy","Zomato","Blinkit"])
-    fig = px.choropleth(
-        geo_df,
-        geojson=geojson if geojson else None,
-        locations="state",
-        featureidkey="properties.ST_NM",
-        color=app_choice,
-        hover_name="state",
-        color_continuous_scale="YlOrRd",
-        title=f"{app_choice} Popularity Across India"
+    st.subheader("📊 Regional Popularity Across States")
+    app_choice = st.selectbox("Choose App to Visualize:", ["Swiggy","Zomato","Blinkit"])
+
+    # Bar Chart
+    geo_sorted = geo_df.sort_values(by=app_choice, ascending=False)
+    fig = px.bar(
+        geo_sorted,
+        x=app_choice,
+        y="state",
+        orientation="h",
+        text=app_choice,
+        title=f"{app_choice} Popularity Across States",
+        labels={app_choice:"Search Index", "state":"State"}
     )
-    fig.update_geos(fitbounds="locations", visible=False)
+    fig.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig, use_container_width=True)
-    st.markdown("> 🔹 Hover over states to see search index.\n> 🔹 Switch apps using the dropdown above.")
+
+    # Heatmap Table
+    st.subheader(f"🌡️ Color-coded Table: {app_choice}")
+    st.dataframe(
+        geo_df.style.background_gradient(subset=[app_choice], cmap="YlOrRd")
+    )
+
+    st.markdown("**Insights:**")
+    st.markdown("- Delhi shows high Blinkit interest.")
+    st.markdown("- Swiggy strong in Southern states.")
+    st.markdown("- Zomato leads in Western & metro states.")
 
 # --- Search Intent ---
 elif page == "Search Intent":
@@ -164,9 +179,10 @@ elif page == "Search Intent":
         st.dataframe(top_queries)
         text = " ".join(top_queries["query"].dropna().tolist())
     except Exception:
-        st.warning("⚠️ Could not fetch related queries. Showing placeholder.")
+        st.warning("⚠️ Could not fetch related queries. Showing placeholders.")
         placeholder_queries = ["Swiggy coupon","Swiggy near me","Zomato pizza","Blinkit near me"]
         text = " ".join(placeholder_queries)
+
     wc = WordCloud(width=800, height=400, background_color="white").generate(text)
     fig, ax = plt.subplots(figsize=(10,5))
     ax.imshow(wc, interpolation="bilinear")
@@ -178,6 +194,7 @@ elif page == "Stats & Correlations":
     st.subheader("📊 Stats & Correlations")
     corr = df[["Swiggy","Zomato","Blinkit"]].corr()
     st.dataframe(corr)
+
     st.markdown("**Key Formulas:**")
     st.latex(r"Z = \frac{x - \mu}{\sigma}")
     st.latex(r"\text{Correlation}(X,Y) = \frac{\text{cov}(X,Y)}{\sigma_X \sigma_Y}")
