@@ -16,11 +16,71 @@ st.set_page_config(
     layout="wide"
 )
 
+# ---------------------------
+# 2. CSS Animations & Styling
+# ---------------------------
+st.markdown("""
+<style>
+/* Sidebar buttons animation */
+.css-1lcbmhc.e1fqkh3o2 > div[data-baseweb="radio"] > label {
+    transition: all 0.3s ease;
+    border-radius: 8px;
+    padding: 8px;
+}
+.css-1lcbmhc.e1fqkh3o2 > div[data-baseweb="radio"] > label:hover {
+    background-color: #F0F3F8;
+    transform: scale(1.03);
+}
+
+/* Selected button highlight */
+.css-1lcbmhc.e1fqkh3o2 > div[data-baseweb="radio"] > label[data-state="checked"] {
+    background-color: #D6EAF8 !important;
+    font-weight: bold;
+    color: #2E86C1;
+}
+
+/* Fade-in for page sections */
+.stApp > div:nth-child(2) > div.block-container {
+    animation: fadeInSection 0.8s ease-out;
+}
+
+@keyframes fadeInSection {
+    0% {opacity:0; transform: translateY(20px);}
+    100% {opacity:1; transform: translateY(0);}
+}
+
+/* Subheaders bounce slightly */
+h2, h3 {
+    animation: bounceSubheader 2s infinite;
+}
+@keyframes bounceSubheader {
+    0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+    40% {transform: translateY(-5px);}
+    60% {transform: translateY(-2px);}
+}
+
+/* Sidebar tooltip */
+[data-baseweb="radio"] > label:hover::after {
+    content: attr(title);
+    position: absolute;
+    background: #2E86C1;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 5px;
+    font-size: 12px;
+    top: -25px;
+    left: 50%;
+    transform: translateX(-50%);
+    white-space: nowrap;
+}
+</style>
+""", unsafe_allow_html=True)
+
 st.title("Search Before Action: Google Trends & India’s Delivery Wars")
 st.markdown("### Swiggy 🟠 | Zomato 🔴 | Blinkit 🟢")
 
 # ---------------------------
-# 2. Helper Functions
+# 3. Helper Functions
 # ---------------------------
 @st.cache_data(ttl=86400)
 def load_trends():
@@ -57,7 +117,7 @@ def load_trends():
     return data, geo
 
 # ---------------------------
-# 3. Load Data
+# 4. Load Data
 # ---------------------------
 try:
     df, geo_df = load_trends()
@@ -78,20 +138,23 @@ except Exception:
     })
 
 # ---------------------------
-# 4. Sidebar Navigation
+# 5. Sidebar Navigation
 # ---------------------------
 st.sidebar.title("📊 Dashboard Navigation")
-page = st.sidebar.radio("Go to:", [
-    "Overview",
-    "Trends Over Time",
-    "Regional Insights",
-    "Search Intent",
-    "Stats & Correlations",
-    "Challenges & Story"
-])
+page = st.sidebar.radio(
+    "Go to:",
+    [
+        "Overview",
+        "Trends Over Time",
+        "Regional Insights",
+        "Search Intent",
+        "Stats & Correlations",
+        "Challenges & Story"
+    ]
+)
 
 # ---------------------------
-# 5. Pages
+# 6. Pages
 # ---------------------------
 
 # --- Overview Page ---
@@ -150,7 +213,9 @@ elif page == "Regional Insights":
         orientation="h",
         text=app_choice,
         title=f"{app_choice} Popularity Across States",
-        labels={app_choice:"Search Index", "state":"State"}
+        labels={app_choice:"Search Index", "state":"State"},
+        color=app_choice,
+        color_continuous_scale="YlOrRd"
     )
     fig.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig, use_container_width=True)
@@ -271,5 +336,4 @@ footer_html = """
     <p class="footer-copy">&copy; 2025 Search Before Action: Delivery Wars</p>
 </div>
 """
-
 st.markdown(footer_html, unsafe_allow_html=True)
