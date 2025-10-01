@@ -58,21 +58,6 @@ h2, h3 {
     40% {transform: translateY(-5px);}
     60% {transform: translateY(-2px);}
 }
-
-/* Sidebar tooltip */
-[data-baseweb="radio"] > label:hover::after {
-    content: attr(title);
-    position: absolute;
-    background: #2E86C1;
-    color: white;
-    padding: 4px 8px;
-    border-radius: 5px;
-    font-size: 12px;
-    top: -25px;
-    left: 50%;
-    transform: translateX(-50%);
-    white-space: nowrap;
-}
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,23 +69,19 @@ st.markdown("### Swiggy 🟠 | Zomato 🔴 | Blinkit 🟢")
 # ---------------------------
 @st.cache_data(ttl=86400)
 def load_trends():
-    """Fetch live Google Trends data (5 years) for Swiggy, Zomato, Blinkit in India."""
     pytrends = TrendReq(hl="en-IN", tz=330)
     kw_list = ["Swiggy", "Zomato", "Blinkit"]
     pytrends.build_payload(kw_list, timeframe="today 5-y", geo="IN")
 
-    # Time-series data
     data = pytrends.interest_over_time()
     if "isPartial" in data.columns:
         data = data.drop(columns=["isPartial"])
     data = data.reset_index()
 
-    # State-level data
     geo = pytrends.interest_by_region(resolution="REGION", inc_low_vol=False, inc_geo_code=False)
     geo = geo.reset_index()
     geo = geo.rename(columns={"geoName": "state"})
 
-    # Standardize state names
     state_mapping = {
         "NCT": "Delhi",
         "Orissa": "Odisha",
@@ -154,7 +135,7 @@ page = st.sidebar.radio(
 )
 
 # ---------------------------
-# 6. Pages
+# 6. Pages with Enhanced Insights
 # ---------------------------
 
 # --- Overview Page ---
@@ -174,10 +155,11 @@ if page == "Overview":
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("**Key Observations:**")
-    st.markdown("- Blinkit shows rapid growth post-2022 → quick-commerce trend.")
-    st.markdown("- Swiggy dominates in South India historically.")
-    st.markdown("- Zomato strong in West & metro cities.")
+    st.markdown("**💡 Key Insights:**")
+    st.markdown("🟢 Blinkit shows rapid growth post-2022 → rise of quick-commerce.")
+    st.markdown("🟠 Swiggy dominates historically in Southern India.")
+    st.markdown("🔴 Zomato is strong in Western & metro cities.")
+    st.markdown("⚡ Peaks in search often align with promotions, festivals, or news.")
 
 # --- Trends Over Time ---
 elif page == "Trends Over Time":
@@ -194,17 +176,16 @@ elif page == "Trends Over Time":
     )
     st.plotly_chart(fig, use_container_width=True)
 
-    st.markdown("**Insights:**")
-    st.markdown("- Smoothing removes festival spikes, revealing true growth trends.")
-    st.markdown("- Blinkit spikes often precede media headlines by months.")
-    st.markdown("- Use these trends for planning promotions & stock.")
+    st.markdown("**💡 Insights:**")
+    st.markdown(f"🧹 Smoothing removes short-term spikes (festival or promo events). Window = {window} weeks.")
+    st.markdown("🟢 Blinkit shows sudden growth in launch periods.")
+    st.markdown("🟠 Swiggy/Zomato trends reveal long-term engagement patterns.")
 
 # --- Regional Insights ---
 elif page == "Regional Insights":
     st.subheader("📊 Regional Popularity Across States")
     app_choice = st.selectbox("Choose App to Visualize:", ["Swiggy","Zomato","Blinkit"])
 
-    # Bar Chart
     geo_sorted = geo_df.sort_values(by=app_choice, ascending=False)
     fig = px.bar(
         geo_sorted,
@@ -220,16 +201,16 @@ elif page == "Regional Insights":
     fig.update_layout(yaxis={'categoryorder':'total ascending'})
     st.plotly_chart(fig, use_container_width=True)
 
-    # Heatmap Table
     st.subheader(f"🌡️ Color-coded Table: {app_choice}")
     st.dataframe(
         geo_df.style.background_gradient(subset=[app_choice], cmap="YlOrRd")
     )
 
-    st.markdown("**Insights:**")
-    st.markdown("- Delhi shows high Blinkit interest.")
-    st.markdown("- Swiggy strong in Southern states.")
-    st.markdown("- Zomato leads in Western & metro states.")
+    st.markdown("**💡 Insights:**")
+    st.markdown("🏙️ Delhi shows high Blinkit interest → urban adoption.")
+    st.markdown("🌴 Swiggy strong in Southern states like Tamil Nadu & Karnataka.")
+    st.markdown("🏢 Zomato leads in Western/metro regions.")
+    st.markdown("📈 Regional strategies can be optimized using this data.")
 
 # --- Search Intent ---
 elif page == "Search Intent":
@@ -254,11 +235,21 @@ elif page == "Search Intent":
     ax.axis("off")
     st.pyplot(fig)
 
+    st.markdown("**💡 Insights:**")
+    st.markdown("🔍 Reveals real user intent: coupons, nearby services, popular items.")
+    st.markdown("⚡ Blinkit → speed & availability focus.")
+    st.markdown("🟠 Swiggy/Zomato → menu preferences & discounts.")
+
 # --- Stats & Correlations ---
 elif page == "Stats & Correlations":
     st.subheader("📊 Stats & Correlations")
     corr = df[["Swiggy","Zomato","Blinkit"]].corr()
     st.dataframe(corr)
+
+    st.markdown("**💡 Insights:**")
+    st.markdown("📈 High positive correlation → similar popularity trends.")
+    st.markdown("⚖️ Negative correlation → competitive dynamics in certain periods.")
+    st.markdown("🔮 Useful for forecasting growth and overlap in user interest.")
 
     st.markdown("**Key Formulas:**")
     st.latex(r"Z = \frac{x - \mu}{\sigma}")
@@ -274,11 +265,16 @@ elif page == "Challenges & Story":
     st.markdown("- Sparse Data → focused on top 10 states")
     st.info("💡 Eureka: Blinkit’s Delhi surge appeared in Trends months before headlines!")
 
+    st.markdown("**💡 Insights:**")
+    st.markdown("🧩 Scaling & smoothing reveal long-term trends.")
+    st.markdown("🌍 Regional differences uncover hidden growth pockets.")
+    st.markdown("📊 Trend analysis guides marketing campaigns & inventory planning.")
+
 # Sidebar Footer
 st.sidebar.markdown("---")
 st.sidebar.markdown("Made with ❤️ using Streamlit, PyTrends, Plotly & WordCloud")
 
-# --------------------------- Fancy Footer with Smooth Hover ---------------------------
+# --------------------------- Fancy Footer ---------------------------
 footer_html = """
 <style>
 .footer-card {
