@@ -6,6 +6,10 @@ import plotly.express as px
 from wordcloud import WordCloud
 import matplotlib.pyplot as plt
 from pytrends.request import TrendReq
+from io import BytesIO
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
+import requests
 
 # ---------------------------
 # 1. Page Config
@@ -20,14 +24,14 @@ st.title("Search Before Action: Google Trends & India’s Delivery Wars")
 st.markdown("### Swiggy 🟠 | Zomato 🔴 | Blinkit 🟢")
 
 # ---------------------------
-# 2. Fetch Data from Google Trends
+# 2. Fetch Google Trends Data
 # ---------------------------
-@st.cache_data(ttl=86400)  # cache for 24 hours
+@st.cache_data(ttl=86400)  # Cache for 24 hours
 def load_trends():
     pytrends = TrendReq(hl="en-IN", tz=330)
     kw_list = ["Swiggy", "Zomato", "Blinkit"]
 
-    # 5 years, India
+    # 5 years of data for India
     pytrends.build_payload(kw_list, timeframe="today 5-y", geo="IN")
     data = pytrends.interest_over_time()
     if "isPartial" in data.columns:
@@ -73,7 +77,34 @@ page = st.sidebar.radio("Go to:", [
 ])
 
 # ---------------------------
-# 4. Page 1: Overview
+# 4. Helper Function: Generate PDF
+# ---------------------------
+def generate_pdf(df, geo_df):
+    buffer = BytesIO()
+    c = canvas.Canvas(buffer, pagesize=A4)
+    c.setFont("Helvetica-Bold", 14)
+    c.drawString(50, 800, "Google Trends: Delivery Wars (Swiggy vs Zomato vs Blinkit)")
+    c.setFont("Helvetica", 10)
+
+    # Summary stats
+    c.drawString(50, 770, f"Swiggy Peak: {df['Swiggy'].max()} index")
+    c.drawString(50, 755, f"Zomato Peak: {df['Zomato'].max()} index")
+    c.drawString(50, 740, f"Blinkit Peak: {df['Blinkit'].max()} index")
+
+    c.drawString(50, 710, "Top 5 States by Blinkit:")
+    top_states = geo_df.sort_values("Blinkit", ascending=False).head(5)
+    y = 695
+    for i, row in top_states.iterrows():
+        c.drawString(60, y, f"{row['state']} → {row['Blinkit']}")
+        y -= 15
+
+    c.showPage()
+    c.save()
+    buffer.seek(0)
+    return buffer
+
+# ---------------------------
+# 5. Overview Page
 # ---------------------------
 if page == "Overview":
     st.subheader("📌 Big Picture: Who’s Winning?")
@@ -92,13 +123,22 @@ if page == "Overview":
 
     st.markdown("> Blinkit’s rocket-like surge post-2022 = quick-commerce going mainstream 🚀")
 
+    # CSV & PDF download
+    st.download_button("⬇️ Download Time-Series (CSV)",
+                       df.to_csv(index=False).encode("utf-8"),
+                       "delivery_trends_timeseries.csv", "text/csv")
+
+    pdf_buffer = generate_pdf(df, geo_df)
+    st.download_button("⬇️ Download Summary (PDF)", pdf_buffer,
+                       "delivery_trends_summary.pdf", "application/pdf")
+
 # ---------------------------
-# 5. Page 2: Trends Over Time
+# 6. Trends Over Time Page
 # ---------------------------
 elif page == "Trends Over Time":
     st.subheader("📈 Interactive Time-Series")
 
-    # Rolling average to smooth festival spikes
+    # Smoothing for festival spikes
     window = st.slider("Smoothing Window (weeks):", 1, 8, 4)
     df_smooth = df.copy()
     df_smooth[["Swiggy", "Zomato", "Blinkit"]] = df_smooth[["Swiggy", "Zomato", "Blinkit"]].rolling(window).mean()
@@ -106,35 +146,60 @@ elif page == "Trends Over Time":
     fig = px.line(df_smooth, x="date", y=["Swiggy", "Zomato", "Blinkit"],
                   title="Search Trends (Smoothed)")
     st.plotly_chart(fig, use_container_width=True)
-
     st.markdown("> Notice how spikes around Diwali/New Year smooth out, revealing the true trend.")
 
 # ---------------------------
-# 6. Page 3: Regional Insights
+# 7. Regional Insights Page
 # ---------------------------
 elif page == "Regional Insights":
     st.subheader("🗺️ Regional Heatmap (India States)")
 
-    # Winner per state
-    geo_df["winner"] = geo_df[["Swiggy", "Zomato", "Blinkit"]].idxmax(axis=1)
+    # Load GeoJSON
+    @st.cache_data
+    def load_geojson():
+        url = "https://raw.githubusercontent.com/geohacker/india/master/state/india_states.geojson"
+        r = requests.get(url)
+        return r.json()
 
-    # Heatmap
-    fig = px.choropleth(
+    india_states = load_geojson()
+
+    # Standardize state names to match GeoJSON
+    state_mapping = {
+        "NCT": "Delhi",
+        "Orissa": "Odisha",
+        "Uttaranchal": "Uttarakhand",
+        "Jammu & Kashmir": "Jammu and Kashmir",
+        "Andaman & Nicobar Islands": "Andaman & Nicobar",
+        "Dadra and Nagar Haveli": "Dadra & Nagar Haveli",
+        "Daman and Diu": "Daman & Diu",
+        "Arunanchal Pradesh": "Arunachal Pradesh"
+    }
+    geo_df["state"] = geo_df["state"].replace(state_mapping)
+    geo_df["state"] = geo_df["state"].str.title().str.strip()
+
+    # Dropdown to select app
+    selected_app = st.selectbox("Choose App for Heatmap", ["Swiggy", "Zomato", "Blinkit"], index=2)
+
+    fig_map = px.choropleth(
         geo_df,
-        geojson="https://raw.githubusercontent.com/geohacker/india/master/state/india_telengana.json",
-        featureidkey="properties.NAME_1",
+        geojson=india_states,
+        featureidkey="properties.ST_NM",
         locations="state",
-        color="winner",
-        title="Dominant App by State"
+        color=selected_app,
+        hover_name="state",
+        color_continuous_scale="YlOrRd",
+        title=f"{selected_app} Search Interest by State (Google Trends)"
     )
-    st.plotly_chart(fig, use_container_width=True)
+    fig_map.update_geos(fitbounds="locations", visible=False)
+    st.plotly_chart(fig_map, use_container_width=True)
 
-    st.dataframe(geo_df)
-
-    st.markdown("> South India → Swiggy, NCR → Blinkit, Delhi/Mumbai → Zomato stronghold.")
+    # CSV Download
+    st.download_button("⬇️ Download Regional Insights (CSV)",
+                       geo_df.to_csv(index=False).encode("utf-8"),
+                       "delivery_trends_states.csv", "text/csv")
 
 # ---------------------------
-# 7. Page 4: Search Intent
+# 8. Search Intent Page
 # ---------------------------
 elif page == "Search Intent":
     st.subheader("🔍 What Are People Searching?")
@@ -150,7 +215,6 @@ elif page == "Search Intent":
 
         st.write("Top Queries:")
         st.dataframe(top_queries)
-
         st.write("Rising Queries:")
         st.dataframe(rising_queries)
 
@@ -162,11 +226,11 @@ elif page == "Search Intent":
         ax.axis("off")
         st.pyplot(fig)
 
-    except Exception as e:
+    except Exception:
         st.warning("⚠️ Could not fetch related queries. Try again later.")
 
 # ---------------------------
-# 8. Page 5: Stats & Correlations
+# 9. Stats & Correlations Page
 # ---------------------------
 elif page == "Stats & Correlations":
     st.subheader("📊 Math Behind the Insights")
@@ -183,7 +247,7 @@ elif page == "Stats & Correlations":
     st.markdown("> Searches often lead real orders by 3–5 days → planning window for discounts & stocking.")
 
 # ---------------------------
-# 9. Page 6: Challenges & Story
+# 10. Challenges & Story Page
 # ---------------------------
 elif page == "Challenges & Story":
     st.subheader("⚡ Challenges vs Solutions")
