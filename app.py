@@ -212,3 +212,36 @@ elif page == "Challenges & Story":
 # Sidebar Footer
 st.sidebar.markdown("---")
 st.sidebar.markdown("Made with ❤️ using Streamlit, PyTrends, Plotly & WordCloud")
+
+# --------------------------- Fancy Footer ---------------------------
+footer_html = """
+<div style="
+    background-color:#F8F9FA; 
+    padding:20px; 
+    border-radius:10px; 
+    margin-top:30px; 
+    text-align:center; 
+    border:1px solid #E0E0E0;
+    font-family: 'Arial', sans-serif;
+    transition: transform 0.3s;
+" 
+onmouseover="this.style.transform='scale(1.05)'" 
+onmouseout="this.style.transform='scale(1.0)'">
+    <h3 style="margin:5px; color:#2E86C1; font-weight:bold;">Developed by: <span style="color:#D35400;">STANDARD DEVINATS</span></h3>
+    <table style="margin:auto; color:#34495E; font-size:14px; border-collapse: collapse;">
+        <tr>
+            <th style="padding:5px 15px; border-bottom:1px solid #BDC3C7;">Team Member</th>
+            <th style="padding:5px 15px; border-bottom:1px solid #BDC3C7;">Roll Number</th>
+        </tr>
+        <tr><td>NIRANJAN PRAMOD</td><td>252BDA09</td></tr>
+        <tr><td>MENDONCA TANISHA DENIS</td><td>252BDA10</td></tr>
+        <tr><td>TANISHQ SULTANIA</td><td>252BDA12</td></tr>
+        <tr><td>R VINAY KUMAR</td><td>252BDA14</td></tr>
+        <tr><td>RAKSHITH C</td><td>252BDA31</td></tr>
+    </table>
+    <p style="margin-top:10px; font-size:12px; color:#7F8C8D;">&copy; 2025 Search Before Action: Delivery Wars</p>
+</div>
+"""
+
+st.markdown(footer_html, unsafe_allow_html=True)
+
