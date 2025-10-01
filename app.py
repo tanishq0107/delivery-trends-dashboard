@@ -47,7 +47,7 @@ def load_trends():
 
 try:
     df, geo_df = load_trends()
-except Exception as e:
+except Exception:
     st.error("⚠️ Could not fetch live Google Trends data. Showing dummy data instead.")
     dates = pd.date_range("2019-01-01", periods=250, freq="W")
     df = pd.DataFrame({
@@ -149,12 +149,12 @@ elif page == "Trends Over Time":
     st.markdown("> Notice how spikes around Diwali/New Year smooth out, revealing the true trend.")
 
 # ---------------------------
-# 7. Regional Insights Page
+# 7. Regional Insights Page (Side-by-Side Maps)
 # ---------------------------
 elif page == "Regional Insights":
-    st.subheader("🗺️ Regional Heatmap (India States)")
+    st.subheader("🗺️ Regional Heatmap Comparison (India States)")
 
-    # Load GeoJSON
+    # Load India GeoJSON
     @st.cache_data
     def load_geojson():
         url = "https://raw.githubusercontent.com/geohacker/india/master/state/india_states.geojson"
@@ -163,7 +163,7 @@ elif page == "Regional Insights":
 
     india_states = load_geojson()
 
-    # Standardize state names to match GeoJSON
+    # Standardize state names
     state_mapping = {
         "NCT": "Delhi",
         "Orissa": "Odisha",
@@ -177,23 +177,26 @@ elif page == "Regional Insights":
     geo_df["state"] = geo_df["state"].replace(state_mapping)
     geo_df["state"] = geo_df["state"].str.title().str.strip()
 
-    # Dropdown to select app
-    selected_app = st.selectbox("Choose App for Heatmap", ["Swiggy", "Zomato", "Blinkit"], index=2)
+    # Side-by-side maps
+    col1, col2, col3 = st.columns(3)
+    apps = ["Swiggy", "Zomato", "Blinkit"]
+    for col, app in zip([col1, col2, col3], apps):
+        fig = px.choropleth(
+            geo_df,
+            geojson=india_states,
+            featureidkey="properties.ST_NM",
+            locations="state",
+            color=app,
+            hover_name="state",
+            color_continuous_scale="YlOrRd",
+            title=f"{app}"
+        )
+        fig.update_geos(fitbounds="locations", visible=False)
+        col.plotly_chart(fig, use_container_width=True)
 
-    fig_map = px.choropleth(
-        geo_df,
-        geojson=india_states,
-        featureidkey="properties.ST_NM",
-        locations="state",
-        color=selected_app,
-        hover_name="state",
-        color_continuous_scale="YlOrRd",
-        title=f"{selected_app} Search Interest by State (Google Trends)"
-    )
-    fig_map.update_geos(fitbounds="locations", visible=False)
-    st.plotly_chart(fig_map, use_container_width=True)
+    st.markdown("> Comparison shows regional dominance: South India → Swiggy, Delhi/NCR → Blinkit, Mumbai/West → Zomato")
 
-    # CSV Download
+    # CSV download
     st.download_button("⬇️ Download Regional Insights (CSV)",
                        geo_df.to_csv(index=False).encode("utf-8"),
                        "delivery_trends_states.csv", "text/csv")
