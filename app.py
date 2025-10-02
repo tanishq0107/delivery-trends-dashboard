@@ -317,7 +317,7 @@ footer_html = """
 </style>
 
 <div class="footer-card">
-    <h3 class="footer-title">Developed by: <span class="footer-team">STANDARD DEVINATS</span></h3>
+    <h3 class="footer-title">Developed by: <span class="footer-team">STANDARD DEVIANTS</span></h3>
     <table class="footer-table">
         <tr>
             <th>Team Member</th>
